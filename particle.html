@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>マウス軌跡パーティクル（残像なし）</title>
+    <title>マウス軌跡 - クリックで大きな花</title>
     <style>
-        /* ページ全体を覆うキャンバスのスタイル設定 */
         body {
             margin: 0;
-            overflow: hidden; /* スクロールバー非表示 */
-            background-color: #111; /* 背景色を暗くしてパーティクルを目立たせる */
+            overflow: hidden;
+            background-color: #1a1a2e;
+            cursor: default;
         }
         canvas {
             display: block;
@@ -17,103 +17,162 @@
     </style>
 </head>
 <body>
-    <canvas id="particleCanvas"></canvas>
+    <canvas id="flowerCanvas"></canvas>
 
     <script>
-        // キャンバス要素の取得と初期設定
-        const canvas = document.getElementById('particleCanvas');
+        const canvas = document.getElementById('flowerCanvas');
         const ctx = canvas.getContext('2d');
-        const BG_COLOR = '#111'; // 背景色を定数として定義
+        const BG_COLOR = '#1a1a2e';
 
-        // 画面サイズに合わせてキャンバスのサイズを設定
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
 
-        // ウィンドウサイズ変更時のリサイズ処理
         window.addEventListener('resize', () => {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
         });
 
-        // パーティクルを格納する配列
-        const particles = [];
-        
-        // マウスの座標を保持するオブジェクト
-        const mouse = {
-            x: undefined,
-            y: undefined
-        };
+        const flowers = []; // 通常の花
+        const bigFlowers = []; //  クリックで生成される大きな花を格納する配列
 
-        // マウス移動時のイベントリスナー
-        window.addEventListener('mousemove', (event) => {
-            mouse.x = event.x;
-            mouse.y = event.y;
-            // マウスが動くたびに新しいパーティクルを生成
-            // 生成数を減らして、個々の粒を見やすくしました
-            for (let i = 0; i < 3; i++) {
-                particles.push(new Particle(mouse.x, mouse.y));
-            }
-        });
+        const mouse = { x: undefined, y: undefined };
 
-        // --- パーティクルクラスの定義 ---
-        class Particle {
-            constructor(x, y) {
+        // --- Flowerクラスの定義 ---
+        class Flower {
+            constructor(x, y, isBig = false) { //  isBig フラグを追加
                 this.x = x;
                 this.y = y;
-                // パーティクルのサイズ（徐々に小さくなる）
-                this.size = Math.random() * 4 + 2; // サイズを少し大きくしました
-                // 拡散する速度（ランダムに設定）
-                this.speedX = Math.random() * 4 - 2; // 拡散を速くしました
-                this.speedY = Math.random() * 4 - 2;
-                // 色をランダムな明るい色に設定
-                this.color = `hsl(${Math.random() * 360}, 100%, 70%)`;
+
+                if (isBig) {
+                    this.initialSize = Math.random() * 30 + 50; //  大きな花のサイズ
+                    this.fadeRate = 0.02; //  大きな花は少し速く消える
+                    this.speedX = Math.random() * 3 - 1.5; //  大きな花は少し速く拡散
+                    this.speedY = Math.random() * 3 - 1.5;
+                    this.rotationSpeed = Math.random() * 0.08 - 0.04; //  大きな花は速く回転
+                } else {
+                    this.initialSize = Math.random() * 10 + 15; // 通常の花のサイズ
+                    this.fadeRate = 0.005; // 通常のフェードアウト速度
+                    this.speedX = Math.random() * 2 - 1;
+                    this.speedY = Math.random() * 2 - 1;
+                    this.rotationSpeed = 0.02;
+                }
+                
+                this.size = this.initialSize;
+                this.opacity = 1;
+                this.rotation = Math.random() * Math.PI * 2;
+                
+                const hue = Math.random() * 360;
+                this.petalColor = `hsl(${hue}, 80%, 70%)`;
+                this.coreColor = `hsl(${hue + 60}, 100%, 50%)`;
+                this.outlineColor = `hsl(${hue}, 50%, 40%)`;
+                this.numPetals = Math.floor(Math.random() * 3) + 4;
             }
 
-            // パーティクルの位置を更新
             update() {
                 this.x += this.speedX;
                 this.y += this.speedY;
-                // サイズを徐々に小さくする
-                if (this.size > 0.1) this.size -= 0.05;
-            }
+                
+                this.opacity -= this.fadeRate; 
+                
+                if (this.size > 5) this.size -= 0.02;
+                
+                this.rotation += this.rotationSpeed; 
 
-            // パーティクルを描画
-            draw() {
-                ctx.fillStyle = this.color;
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-                ctx.fill();
-            }
-        }
-
-        // --- アニメーションループの定義 ---
-        function animate() {
-            //  変更点: キャンバス全体を完全に背景色で塗りつぶす
-            // これにより、前のフレームの描画が一切残りません。
-            ctx.fillStyle = BG_COLOR;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            // パーティクルを更新・描画
-            for (let i = 0; i < particles.length; i++) {
-                particles[i].update();
-                particles[i].draw();
-            }
-
-            // サイズが小さくなりすぎたパーティクルを配列から削除
-            for (let i = 0; i < particles.length; i++) {
-                if (particles[i].size <= 0.1) {
-                    particles.splice(i, 1);
-                    i--; // 削除により配列のインデックスがずれるのを調整
+                if (this.opacity <= 0) {
+                    this.markForDeletion = true;
                 }
             }
 
-            // 次のフレームを要求
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+
+                ctx.globalAlpha = Math.max(0, this.opacity); 
+
+                // 花びらを描画
+                for (let i = 0; i < this.numPetals; i++) {
+                    const angle = (i * (Math.PI * 2)) / this.numPetals;
+                    const petalX = Math.cos(angle) * (this.size * 0.4);
+                    const petalY = Math.sin(angle) * (this.size * 0.4);
+
+                    const currentPetalSize = this.size / 3;
+
+                    ctx.fillStyle = this.petalColor;
+                    ctx.beginPath();
+                    ctx.ellipse(petalX, petalY, currentPetalSize * 0.7, currentPetalSize, angle + Math.PI / 2, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.strokeStyle = this.outlineColor;
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                }
+
+                // 花芯を描画
+                ctx.fillStyle = this.coreColor;
+                ctx.beginPath();
+                ctx.arc(0, 0, this.size / 5, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.restore();
+                ctx.globalAlpha = 1;
+            }
+        }
+
+        // --- マウスダウンイベント（クリック） ---
+        canvas.addEventListener('mousedown', (event) => {
+            const clickX = event.clientX;
+            const clickY = event.clientY;
+
+            //  クリックした場所に大きな花を生成して bigFlowers 配列に追加
+            bigFlowers.push(new Flower(clickX, clickY, true)); // true を渡して大きな花を生成
+        });
+
+        // --- マウスを動かしたときに花を生成 ---
+        window.addEventListener('mousemove', (event) => {
+            mouse.x = event.x;
+            mouse.y = event.y;
+            // 花の生成頻度を調整
+            if (Math.random() < 0.3) {
+                flowers.push(new Flower(mouse.x, mouse.y, false)); // false を渡して通常の花を生成
+            }
+        });
+
+        // --- アニメーションループの定義 ---
+        function animate() {
+            ctx.fillStyle = BG_COLOR;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 通常の花を更新・描画
+            for (let i = 0; i < flowers.length; i++) {
+                flowers[i].update();
+                flowers[i].draw();
+            }
+
+            //  大きな花を更新・描画
+            for (let i = 0; i < bigFlowers.length; i++) {
+                bigFlowers[i].update();
+                bigFlowers[i].draw();
+            }
+
+            // 通常の花から透明度が0になったものを削除
+            for (let i = flowers.length - 1; i >= 0; i--) {
+                if (flowers[i].markForDeletion) {
+                    flowers.splice(i, 1);
+                }
+            }
+
+            //  大きな花から透明度が0になったものを削除
+            for (let i = bigFlowers.length - 1; i >= 0; i--) {
+                if (bigFlowers[i].markForDeletion) {
+                    bigFlowers.splice(i, 1);
+                }
+            }
+
             requestAnimationFrame(animate);
         }
 
-        // アニメーション開始
         animate();
-
     </script>
 </body>
 </html>
