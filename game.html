@@ -6,7 +6,7 @@
     <style>
         body {
             display: flex;
-            flex-direction: column; /* 垂直方向に並べる */
+            flex-direction: column;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
@@ -15,7 +15,7 @@
         }
         canvas {
             border: 2px solid #333;
-            background-color: #000; /* ゲーム背景を黒に */
+            background-color: #000;
         }
         .controls {
             margin-top: 10px;
@@ -32,6 +32,7 @@
 <canvas id="gameCanvas" width="480" height="640"></canvas>
 
 <div class="controls">
+    <button id="startButton">Start / Retry (Enterキー)</button> 
     <button id="pauseButton">Pause / Resume (Enterキー)</button>
 </div>
 
@@ -41,53 +42,85 @@
     // -----------------------------------------------------
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
+    const startButton = document.getElementById('startButton');
     const pauseButton = document.getElementById('pauseButton');
 
     // ゲーム変数
     let gameLoop;
     let isGameOver = false;
     let isPaused = false;
+    let isGameStarted = false; 
 
-    // プレイヤー（自機）
-    const player = {
-        x: canvas.width / 2 - 25,
-        y: canvas.height - 70,
-        width: 50,
-        height: 50,
-        speed: 8
-    };
+    // プレイヤー（自機）の初期設定
+    const initialPlayer = { x: canvas.width / 2 - 25, y: canvas.height - 70, width: 50, height: 50, speed: 8 };
+    let player = { ...initialPlayer };
 
     // 弾丸の配列
-    let bullets = []; // 自機の弾
-    let enemyBullets = []; // ★敵の弾
+    let bullets = []; 
+    let enemyBullets = []; 
 
     // 敵の配列
     let enemies = [];
     let enemySpawnRate = 1000;
     let lastEnemySpawnTime = 0;
+    const initialEnemySpawnRate = 1000; 
 
     // スコア
     let score = 0;
 
-    // キー入力の状態を保持するオブジェクト
+    // キー入力の状態
     const keys = {
         ArrowLeft: false,
         ArrowRight: false,
         Space: false,
-        Enter: false // ★Enterキーを追加
+        Enter: false
     };
 
     // -----------------------------------------------------
-    // 2. イベントリスナー（キー入力＆ボタン）
+    // 1.5. ゲームのリセット関数
+    // -----------------------------------------------------
+    const resetGame = () => {
+        // 全てのゲーム変数を初期化
+        player = { ...initialPlayer };
+        bullets = [];
+        enemyBullets = [];
+        enemies = [];
+        score = 0;
+        isGameOver = false;
+        isPaused = false;
+        isGameStarted = true; // ゲームをスタート状態に
+        enemySpawnRate = initialEnemySpawnRate;
+        lastEnemySpawnTime = 0;
+
+        // ボタンの表示を切り替え
+        startButton.style.display = 'none';
+        pauseButton.style.display = 'inline-block';
+        pauseButton.textContent = 'Pause / Resume (Enterキー)';
+
+        // ゲームループを再開
+        gameLoop = requestAnimationFrame(gameUpdate);
+    };
+
+
+    // -----------------------------------------------------
+    // 2. イベントリスナー
     // -----------------------------------------------------
     document.addEventListener('keydown', (e) => {
         if (keys.hasOwnProperty(e.code)) {
             keys[e.code] = true;
         }
-
-        // ★Enterキーで一時停止をトグル
-        if (e.code === 'Enter' && !isGameOver) {
-            isPaused = !isPaused;
+        
+        // ★★★ エンターキーの統合処理 ★★★
+        if (e.code === 'Enter') {
+            if (!isGameStarted || isGameOver) {
+                // ゲーム開始前 または ゲームオーバー時 -> 開始/リトライ
+                if (!isGameStarted || isGameOver) {
+                    resetGame();
+                }
+            } else if (isGameStarted && !isGameOver) {
+                // プレイ中 -> 一時停止/再開
+                isPaused = !isPaused;
+            }
         }
     });
 
@@ -97,9 +130,12 @@
         }
     });
 
-    // 一時停止ボタンのイベントリスナー
+    // スタート・リトライボタン
+    startButton.addEventListener('click', resetGame);
+
+    // 一時停止ボタン
     pauseButton.addEventListener('click', () => {
-        if (!isGameOver) {
+        if (isGameStarted && !isGameOver) {
             isPaused = !isPaused;
         }
     });
@@ -127,49 +163,31 @@
     // 3. 描画関数
     // -----------------------------------------------------
 
-    // プレイヤーの描画
-    const drawPlayer = () => {
-        ctx.fillStyle = 'cyan';
-        ctx.fillRect(player.x, player.y, player.width, player.height);
-    };
+    const drawPlayer = () => { ctx.fillStyle = 'cyan'; ctx.fillRect(player.x, player.y, player.width, player.height); };
+    const drawBullets = () => { ctx.fillStyle = 'yellow'; bullets.forEach(b => { ctx.fillRect(b.x, b.y, b.width, b.height); }); };
+    const drawEnemyBullets = () => { ctx.fillStyle = 'magenta'; enemyBullets.forEach(b => { ctx.fillRect(b.x, b.y, b.width, b.height); }); };
+    const drawEnemies = () => { ctx.fillStyle = 'red'; enemies.forEach(e => { ctx.fillRect(e.x, e.y, e.width, e.height); }); };
+    const drawScore = () => { ctx.fillStyle = 'white'; ctx.font = '24px Arial'; ctx.textAlign = 'left'; ctx.fillText(`SCORE: ${score}`, 10, 30); };
 
-    // 自機の弾丸の描画
-    const drawBullets = () => {
-        ctx.fillStyle = 'yellow';
-        bullets.forEach(b => {
-            ctx.fillRect(b.x, b.y, b.width, b.height);
-        });
-    };
+    // スタート画面の描画
+    const drawStartScreen = () => {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // ★敵の弾丸の描画
-    const drawEnemyBullets = () => {
-        ctx.fillStyle = 'magenta'; // 敵の弾はマゼンタ（ピンク）で区別
-        enemyBullets.forEach(b => {
-            ctx.fillRect(b.x, b.y, b.width, b.height);
-        });
-    };
-
-    // 敵の描画
-    const drawEnemies = () => {
-        ctx.fillStyle = 'red';
-        enemies.forEach(e => {
-            ctx.fillRect(e.x, e.y, e.width, e.height);
-        });
-    };
-
-    // スコアの描画
-    const drawScore = () => {
         ctx.fillStyle = 'white';
-        ctx.font = '24px Arial';
-        ctx.textAlign = 'left';
-        ctx.fillText(`SCORE: ${score}`, 10, 30);
-    };
+        ctx.font = '40px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('SHMUP GAME', canvas.width / 2, canvas.height / 2 - 50);
 
-    // 一時停止中の表示
+        ctx.font = '20px Arial';
+        ctx.fillText('Press ENTER or Space to Start', canvas.width / 2, canvas.height / 2 + 20);
+        ctx.fillText('Use ← → to move, Space to shoot', canvas.width / 2, canvas.height / 2 + 60);
+        ctx.fillText('Press ENTER to Pause', canvas.width / 2, canvas.height / 2 + 90);
+    }
+
     const drawPaused = () => {
         ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-
         ctx.fillStyle = 'white';
         ctx.font = '48px Arial';
         ctx.textAlign = 'center';
@@ -187,6 +205,8 @@
         ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 30);
         ctx.font = '30px Arial';
         ctx.fillText(`Final Score: ${score}`, canvas.width / 2, canvas.height / 2 + 30);
+        ctx.font = '24px Arial';
+        ctx.fillText('Press ENTER to Retry', canvas.width / 2, canvas.height / 2 + 90);
     };
 
 
@@ -195,32 +215,26 @@
     // -----------------------------------------------------
 
     const updatePlayer = () => {
-        if (keys.ArrowLeft) {
-            player.x -= player.speed;
-        }
-        if (keys.ArrowRight) {
-            player.x += player.speed;
-        }
+        if (keys.ArrowLeft) { player.x -= player.speed; }
+        if (keys.ArrowRight) { player.x += player.speed; }
         player.x = Math.max(0, Math.min(canvas.width - player.width, player.x));
+
+        // スタート画面でSpaceキーを押した場合もゲーム開始
+        if (!isGameStarted && keys.Space) {
+            resetGame();
+        }
     };
 
     const updateBullets = () => {
-        bullets.forEach(b => {
-            b.y -= b.speed;
-        });
+        bullets.forEach(b => { b.y -= b.speed; });
         bullets = bullets.filter(b => b.y + b.height > 0);
     };
 
-    // ★敵の弾の位置を更新
     const updateEnemyBullets = () => {
-        enemyBullets.forEach(b => {
-            b.y += b.speed; // 下方向に移動
-        });
-        // 画面外に出た弾丸を削除
+        enemyBullets.forEach(b => { b.y += b.speed; });
         enemyBullets = enemyBullets.filter(b => b.y < canvas.height);
     };
 
-    // 敵の出現と位置を更新 (攻撃ロジックを含む)
     const updateEnemies = (timestamp) => {
         // 敵の生成
         if (timestamp - lastEnemySpawnTime > enemySpawnRate) {
@@ -230,23 +244,21 @@
                 width: 40,
                 height: 40,
                 speed: 1.5,
-                lastShotTime: timestamp // 敵ごとの発射時間管理
+                lastShotTime: timestamp
             };
             enemies.push(enemy);
             lastEnemySpawnTime = timestamp;
-            if (enemySpawnRate > 300) {
-                 enemySpawnRate -= 5;
-            }
+            if (enemySpawnRate > 300) { enemySpawnRate -= 5; }
         }
 
         // 敵の移動と攻撃
         enemies.forEach(e => {
             e.y += e.speed;
 
-            // ★敵の攻撃ロジック (1/120の確率、または1秒に1回程度)
+            // 敵の攻撃ロジック
             if (Math.random() < 0.008 && timestamp - e.lastShotTime > 1000) {
                 const enemyBullet = {
-                    x: e.x + e.width / 2 - 2, // 敵の中央から発射
+                    x: e.x + e.width / 2 - 2,
                     y: e.y + e.height,
                     width: 4,
                     height: 8,
@@ -258,26 +270,14 @@
         });
 
         // 画面下端に到達した敵
-        enemies = enemies.filter(e => {
-            if (e.y < canvas.height) {
-                return true;
-            } else {
-                // 敵が画面外に出てもゲームオーバーにはせず、消えるようにする (難易度調整)
-                // isGameOver = true; // ← この行をコメントアウトしました
-                return false;
-            }
-        });
+        enemies = enemies.filter(e => e.y < canvas.height);
     };
 
-    // 当たり判定 (AABB)
     const checkCollision = (rect1, rect2) => {
-        return rect1.x < rect2.x + rect2.width &&
-               rect1.x + rect1.width > rect2.x &&
-               rect1.y < rect2.y + rect2.height &&
-               rect1.y + rect1.height > rect2.y;
+        return rect1.x < rect2.x + rect2.width && rect1.x + rect1.width > rect2.x &&
+               rect1.y < rect2.y + rect2.height && rect1.y + rect1.height > rect2.y;
     };
 
-    // 衝突判定の処理
     const handleCollisions = () => {
         // 1. 自機の弾と敵の衝突
         bullets.forEach((bullet, bIndex) => {
@@ -291,25 +291,21 @@
             });
         });
 
-        // 2. プレイヤーと敵の弾の衝突 (Player vs EnemyBullet)
+        // 2. プレイヤーと敵の弾の衝突
         enemyBullets.forEach((eBullet, ebIndex) => {
             if (checkCollision(player, eBullet)) {
                 isGameOver = true;
-                enemyBullets.splice(ebIndex, 1); // 弾を削除
+                enemyBullets.splice(ebIndex, 1);
                 return;
             }
         });
 
-        // 3. プレイヤーと敵本体の衝突 (Player vs Enemy)
+        // 3. プレイヤーと敵本体の衝突
         enemies.forEach(enemy => {
             if (checkCollision(player, enemy)) {
                 isGameOver = true;
             }
         });
-
-        // 衝突により削除された要素でインデックスがずれる問題があるため、
-        // 厳密にはループの後にフィルタリングで処理するのが望ましいですが、
-        // シンプルな実装のためこの形を維持します。
     };
 
 
@@ -318,54 +314,60 @@
     // -----------------------------------------------------
 
     const gameUpdate = (timestamp) => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        if (!isGameStarted) {
+            // ゲーム開始前
+            drawStartScreen();
+            startButton.style.display = 'inline-block';
+            pauseButton.style.display = 'none';
+            gameLoop = requestAnimationFrame(gameUpdate);
+            updatePlayer();
+            return;
+        }
+
         if (isGameOver) {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            drawEnemies();
-            drawEnemyBullets(); // 敵の残弾も描画
-            drawPlayer();
-            drawBullets();
-            drawScore();
+            // ゲームオーバー処理
+            drawEnemies(); drawEnemyBullets(); drawPlayer(); drawBullets(); drawScore();
             drawGameOver();
+            startButton.style.display = 'inline-block'; 
+            startButton.textContent = 'RETRY';
+            pauseButton.style.display = 'none';
             cancelAnimationFrame(gameLoop);
             return;
         }
 
-        // 一時停止中
         if (isPaused) {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            drawEnemies();
-            drawEnemyBullets();
-            drawBullets();
-            drawPlayer();
-            drawScore();
+            // 一時停止中
+            drawEnemies(); drawEnemyBullets(); drawBullets(); drawPlayer(); drawScore();
             drawPaused();
             gameLoop = requestAnimationFrame(gameUpdate);
             return;
         }
 
-        // 描画をクリア
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        // 入力と状態の更新
+        // ゲーム実行中
+        
+        // 更新
         fireBullet(timestamp);
         updatePlayer();
         updateBullets();
-        updateEnemyBullets(); // ★敵の弾を更新
+        updateEnemyBullets();
         updateEnemies(timestamp);
         handleCollisions();
 
         // 描画
         drawEnemies();
-        drawEnemyBullets(); // ★敵の弾を描画
+        drawEnemyBullets();
         drawBullets();
         drawPlayer();
         drawScore();
-
+        
         // 次のフレームを要求
         gameLoop = requestAnimationFrame(gameUpdate);
     };
 
-    // ゲーム開始
+    // 初期起動
+    pauseButton.style.display = 'none'; // 初期状態では非表示
     gameLoop = requestAnimationFrame(gameUpdate);
 </script>
 
