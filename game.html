@@ -6,6 +6,7 @@
     <style>
         body {
             display: flex;
+            flex-direction: column; /* 垂直方向に並べる */
             justify-content: center;
             align-items: center;
             min-height: 100vh;
@@ -16,11 +17,23 @@
             border: 2px solid #333;
             background-color: #000; /* ゲーム背景を黒に */
         }
+        .controls {
+            margin-top: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
 
 <canvas id="gameCanvas" width="480" height="640"></canvas>
+
+<div class="controls">
+    <button id="pauseButton">Pause / Resume</button>
+</div>
 
 <script>
     // -----------------------------------------------------
@@ -28,15 +41,17 @@
     // -----------------------------------------------------
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
+    const pauseButton = document.getElementById('pauseButton');
 
     // ゲーム変数
     let gameLoop;
     let isGameOver = false;
+    let isPaused = false; // ★一時停止機能のための新しい変数
 
     // プレイヤー（自機）
     const player = {
-        x: canvas.width / 2 - 25, // 中央
-        y: canvas.height - 70,    // 下部
+        x: canvas.width / 2 - 25,
+        y: canvas.height - 70,
         width: 50,
         height: 50,
         speed: 8
@@ -61,7 +76,7 @@
     };
 
     // -----------------------------------------------------
-    // 2. イベントリスナー（キー入力）
+    // 2. イベントリスナー（キー入力＆ボタン）
     // -----------------------------------------------------
     document.addEventListener('keydown', (e) => {
         if (keys.hasOwnProperty(e.code)) {
@@ -75,9 +90,17 @@
         }
     });
 
+    // ★一時停止ボタンのイベントリスナー
+    pauseButton.addEventListener('click', () => {
+        if (!isGameOver) {
+            isPaused = !isPaused; // 一時停止の状態を切り替え
+            // ボタンのテキストを変更するなどの処理も可能
+        }
+    });
+
     // スペースキーが押されたとき（弾発射）
     let lastShotTime = 0;
-    const fireRate = 200; // 発射間隔（ミリ秒）
+    const fireRate = 100; // ★弾の発射間隔を高速化 (旧: 200)
 
     const fireBullet = (timestamp) => {
         if (keys.Space && timestamp - lastShotTime > fireRate) {
@@ -129,6 +152,17 @@
         ctx.fillText(`SCORE: ${score}`, 10, 30);
     };
 
+    // ★一時停止中の表示
+    const drawPaused = () => {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.2)'; // 薄い半透明
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = 'white';
+        ctx.font = '48px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('PAUSED', canvas.width / 2, canvas.height / 2);
+    }
+
     // ゲームオーバー画面の描画
     const drawGameOver = () => {
         ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; // 半透明の黒
@@ -144,7 +178,7 @@
 
 
     // -----------------------------------------------------
-    // 4. 更新関数
+    // 4. 更新関数 (※敵の速度は以前の変更通り1.5を使用)
     // -----------------------------------------------------
 
     // プレイヤーの位置を更新
@@ -179,7 +213,7 @@
                 y: -50,
                 width: 40,
                 height: 40,
-                speed: 1.5
+                speed: 1.5 // 敵の速度 (前回の調整を維持)
             };
             enemies.push(enemy);
             lastEnemySpawnTime = timestamp;
@@ -246,12 +280,24 @@
         if (isGameOver) {
             // ゲームオーバー処理
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            drawEnemies(); // 残っている敵を描画
+            drawEnemies();
             drawPlayer();
             drawBullets();
             drawScore();
             drawGameOver();
             cancelAnimationFrame(gameLoop); // ループを停止
+            return;
+        }
+
+        // ★一時停止中なら、描画以外の更新処理をスキップ
+        if (isPaused) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawEnemies();
+            drawBullets();
+            drawPlayer();
+            drawScore();
+            drawPaused(); // PAUSEDの文字を表示
+            gameLoop = requestAnimationFrame(gameUpdate); // 描画は継続して次のフレームを待つ
             return;
         }
 
